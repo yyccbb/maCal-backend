@@ -1,0 +1,168 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ScheduleItemType {
+  EVENT
+  REMINDER
+}
+
+enum ScheduleItemStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum NotificationChannel {
+  PUSH
+  EMAIL
+  SMS
+  LOCAL
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+enum DevicePlatform {
+  IOS
+  WEB
+  ANDROID
+  HARMONYOS
+}
+
+enum SyncOperation {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+model User {
+  id            String         @id @default(uuid()) @db.Uuid
+  account       String         @unique
+  passwordHash  String
+  displayName   String
+  locale        String         @default("en")
+  timezone      String         @default("Asia/Shanghai")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  calendars     Calendar[]
+  scheduleItems ScheduleItem[]
+  notifications Notification[]
+  devices       Device[]
+  refreshTokens RefreshToken[]
+  syncChanges   SyncChange[]
+}
+
+model Calendar {
+  id            String         @id @default(uuid()) @db.Uuid
+  userId        String         @db.Uuid
+  name          String
+  color         String
+  isDefault     Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scheduleItems ScheduleItem[]
+
+  @@index([userId])
+}
+
+model ScheduleItem {
+  id             String             @id @default(uuid()) @db.Uuid
+  userId         String             @db.Uuid
+  calendarId     String?            @db.Uuid
+  type           ScheduleItemType
+  title          String
+  description    String?
+  startTime      DateTime?
+  endTime        DateTime?
+  reminderTime   DateTime?
+  timezone       String
+  recurrenceRule String?
+  status         ScheduleItemStatus @default(ACTIVE)
+  sourceText     String?
+  aiConfidence   Float?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  deletedAt      DateTime?
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  calendar       Calendar?          @relation(fields: [calendarId], references: [id], onDelete: SetNull)
+  notifications  Notification[]
+
+  @@index([userId, startTime])
+  @@index([userId, reminderTime])
+  @@index([userId, status])
+  @@index([calendarId])
+}
+
+model Notification {
+  id             String             @id @default(uuid()) @db.Uuid
+  userId         String             @db.Uuid
+  scheduleItemId String             @db.Uuid
+  triggerTime    DateTime
+  channel        NotificationChannel
+  status         NotificationStatus @default(PENDING)
+  provider       String?
+  errorMessage   String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scheduleItem   ScheduleItem       @relation(fields: [scheduleItemId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([scheduleItemId])
+  @@index([triggerTime])
+}
+
+model Device {
+  id           String         @id @default(uuid()) @db.Uuid
+  userId       String         @db.Uuid
+  platform     DevicePlatform
+  pushProvider String?
+  pushToken    String?
+  timezone     String
+  appVersion   String?
+  lastSeenAt   DateTime       @default(now())
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model SyncChange {
+  id         String        @id @default(uuid()) @db.Uuid
+  userId     String        @db.Uuid
+  entityType String
+  entityId   String        @db.Uuid
+  operation  SyncOperation
+  version    Int
+  createdAt  DateTime      @default(now())
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, version])
+  @@index([userId, version])
+  @@index([entityType, entityId])
+}
