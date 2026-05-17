@@ -18,7 +18,11 @@ export const envValidationSchema = Joi.object({
   AI_THROTTLE_LIMIT: Joi.number().integer().min(1).default(30),
   DEFAULT_LOCALE: Joi.string().default('en'),
   DEFAULT_TIMEZONE: Joi.string().default('Asia/Shanghai'),
-  LLM_PROVIDER: Joi.string().default('placeholder'),
+  LLM_PROVIDER: Joi.string().valid('placeholder', 'siliconflow').default('placeholder'),
+  SILICONFLOW_BASE_URL: Joi.string().uri().default('https://api.siliconflow.cn/v1/chat/completions'),
+  SILICONFLOW_API_KEY: Joi.string().allow('').optional(),
+  SILICONFLOW_MODEL: Joi.string().default('Pro/zai-org/GLM-4.7'),
+  SILICONFLOW_TIMEOUT_MS: Joi.number().integer().min(1000).default(15000),
   SMS_PROVIDER: Joi.string().default('placeholder'),
   OBJECT_STORAGE_PROVIDER: Joi.string().default('placeholder'),
 });

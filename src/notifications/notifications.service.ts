@@ -1,5 +1,5 @@
 import { InjectQueue } from '@nestjs/bullmq';
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   Device,
   DevicePlatform,
@@ -23,6 +23,8 @@ type SchedulableItem = Pick<
 
 @Injectable()
 export class NotificationsService {
+  private readonly logger = new Logger(NotificationsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     @InjectQueue(REMINDERS_QUEUE) private readonly remindersQueue: Queue,
@@ -54,8 +56,25 @@ export class NotificationsService {
       },
     });
 
-    await this.enqueueNotification(notification.id, notification.triggerTime);
-    return notification;
+    try {
+      await this.enqueueNotification(notification.id, notification.triggerTime);
+      return notification;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown queue error';
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.warn(
+        `Failed to enqueue notification ${notification.id}: ${errorMessage}`,
+        stack,
+      );
+
+      return this.prisma.notification.update({
+        where: { id: notification.id },
+        data: {
+          status: NotificationStatus.FAILED,
+          errorMessage,
+        },
+      });
+    }
   }
 
   async rescheduleForItem(userId: string, scheduleItemId: string) {

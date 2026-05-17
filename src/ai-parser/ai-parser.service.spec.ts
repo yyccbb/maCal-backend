@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import { ScheduleItemType } from '@prisma/client';
 import { AiParserService } from './ai-parser.service';
 import { LlmScheduleParserProvider } from './providers/llm-schedule-parser.provider';
@@ -7,9 +8,13 @@ describe('AiParserService', () => {
   let service: AiParserService;
 
   beforeEach(() => {
+    const config = {
+      get: jest.fn((key: string) => (key === 'llm.provider' ? 'placeholder' : undefined)),
+    } as unknown as ConfigService;
+
     service = new AiParserService(
       new RuleBasedScheduleParserProvider(),
-      new LlmScheduleParserProvider(),
+      new LlmScheduleParserProvider(config),
     );
   });
 

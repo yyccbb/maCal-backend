@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma, ScheduleItem, ScheduleItemStatus, ScheduleItemType, SyncOperation } from '@prisma/client';
 import { parseIsoDate, requireDate } from '../common/utils/date.util';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -26,6 +26,8 @@ type NormalizedScheduleItem = {
 
 @Injectable()
 export class ScheduleItemsService {
+  private readonly logger = new Logger(ScheduleItemsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
@@ -96,7 +98,10 @@ export class ScheduleItemsService {
       return created;
     });
 
-    await this.notificationsService.scheduleForItem(item);
+    await this.runNotificationMaintenance(
+      () => this.notificationsService.scheduleForItem(item),
+      `schedule notification for schedule item ${item.id}`,
+    );
     return item;
   }
 
@@ -148,8 +153,14 @@ export class ScheduleItemsService {
       return updated;
     });
 
-    await this.notificationsService.cancelPendingForItem(userId, item.id);
-    await this.notificationsService.scheduleForItem(item);
+    await this.runNotificationMaintenance(
+      () => this.notificationsService.cancelPendingForItem(userId, item.id),
+      `cancel pending notifications for schedule item ${item.id}`,
+    );
+    await this.runNotificationMaintenance(
+      () => this.notificationsService.scheduleForItem(item),
+      `schedule notification for schedule item ${item.id}`,
+    );
     return item;
   }
 
@@ -174,7 +185,10 @@ export class ScheduleItemsService {
       );
     });
 
-    await this.notificationsService.cancelPendingForItem(userId, id);
+    await this.runNotificationMaintenance(
+      () => this.notificationsService.cancelPendingForItem(userId, id),
+      `cancel pending notifications for schedule item ${id}`,
+    );
     return { success: true };
   }
 
@@ -198,18 +212,25 @@ export class ScheduleItemsService {
     });
 
     if (existing.status !== ScheduleItemStatus.COMPLETED) {
-      await this.notificationsService.cancelPendingForItem(userId, id);
+      await this.runNotificationMaintenance(
+        () => this.notificationsService.cancelPendingForItem(userId, id),
+        `cancel pending notifications for schedule item ${id}`,
+      );
     }
 
     return item;
   }
 
   private normalizeCreate(dto: CreateScheduleItemDto): NormalizedScheduleItem {
+    const startTime = parseIsoDate(dto.startTime, 'startTime');
+    const endTime = parseIsoDate(dto.endTime, 'endTime');
+    const reminderTime = parseIsoDate(dto.reminderTime, 'reminderTime');
+
     return {
       ...dto,
-      startTime: parseIsoDate(dto.startTime, 'startTime'),
-      endTime: parseIsoDate(dto.endTime, 'endTime'),
-      reminderTime: parseIsoDate(dto.reminderTime, 'reminderTime'),
+      startTime: dto.type === ScheduleItemType.REMINDER ? null : startTime,
+      endTime: dto.type === ScheduleItemType.REMINDER ? null : endTime,
+      reminderTime,
     };
   }
 
@@ -217,18 +238,25 @@ export class ScheduleItemsService {
     existing: ScheduleItem,
     dto: UpdateScheduleItemDto,
   ): NormalizedScheduleItem {
+    const nextType = dto.type ?? existing.type;
+    const startTime =
+      dto.startTime === undefined ? existing.startTime : parseIsoDate(dto.startTime, 'startTime');
+    const endTime = dto.endTime === undefined ? existing.endTime : parseIsoDate(dto.endTime, 'endTime');
+    const reminderTime =
+      dto.reminderTime === undefined
+        ? existing.type === ScheduleItemType.REMINDER && nextType === ScheduleItemType.EVENT
+          ? null
+          : existing.reminderTime
+        : parseIsoDate(dto.reminderTime, 'reminderTime');
+
     return {
-      type: dto.type ?? existing.type,
+      type: nextType,
       title: dto.title ?? existing.title,
       description: dto.description === undefined ? existing.description : dto.description,
       calendarId: dto.calendarId === undefined ? existing.calendarId : dto.calendarId,
-      startTime:
-        dto.startTime === undefined ? existing.startTime : parseIsoDate(dto.startTime, 'startTime'),
-      endTime: dto.endTime === undefined ? existing.endTime : parseIsoDate(dto.endTime, 'endTime'),
-      reminderTime:
-        dto.reminderTime === undefined
-          ? existing.reminderTime
-          : parseIsoDate(dto.reminderTime, 'reminderTime'),
+      startTime: nextType === ScheduleItemType.REMINDER ? null : startTime,
+      endTime: nextType === ScheduleItemType.REMINDER ? null : endTime,
+      reminderTime,
       timezone: dto.timezone ?? existing.timezone,
       recurrenceRule:
         dto.recurrenceRule === undefined ? existing.recurrenceRule : dto.recurrenceRule,
@@ -265,6 +293,16 @@ export class ScheduleItemsService {
 
     if (!calendar) {
       throw new BadRequestException('calendarId does not belong to the current user');
+    }
+  }
+
+  private async runNotificationMaintenance(action: () => Promise<unknown>, label: string) {
+    try {
+      await action();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.warn(`Failed to ${label}: ${message}`, stack);
     }
   }
 }

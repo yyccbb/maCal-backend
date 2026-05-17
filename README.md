@@ -9,7 +9,7 @@ NestJS + PostgreSQL + Prisma + Redis/BullMQ backend skeleton for a calendar and 
 - User-scoped calendars, schedule items, devices, notifications, and sync
 - Schedule items limited to `EVENT` and `REMINDER`
 - Natural language parsing endpoint that returns structured data without saving it
-- Rule-based parser plus an LLM provider placeholder
+- Rule-based parser plus a SiliconFlow-compatible LLM provider
 - BullMQ `reminders` queue with push provider placeholders
 - China-compatible extension points for APNs, web push, Tencent/JPush/OEM push, SMS, LLM, and object storage
 - Health check for API, PostgreSQL, and Redis
@@ -42,7 +42,11 @@ JWT_ACCESS_SECRET=replace-with-a-long-random-access-secret
 JWT_REFRESH_SECRET=replace-with-a-long-random-refresh-secret
 CORS_ORIGIN=http://localhost:3000,http://localhost:5173
 DEFAULT_TIMEZONE=Asia/Shanghai
-LLM_PROVIDER=placeholder
+LLM_PROVIDER=siliconflow
+SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1/chat/completions
+SILICONFLOW_MODEL=Pro/zai-org/GLM-4.7
+SILICONFLOW_API_KEY=fill-this-in-yourself
+SILICONFLOW_TIMEOUT_MS=15000
 SMS_PROVIDER=placeholder
 OBJECT_STORAGE_PROVIDER=placeholder
 ```
@@ -149,5 +153,5 @@ curl http://localhost:3000/health
 
 - Replace placeholder push providers with APNs, web push, and China-compatible mobile push providers.
 - Keep push provider choice configurable; do not make Firebase or any single provider mandatory.
-- Replace the LLM placeholder through `ScheduleParserProvider`; the service already validates and normalizes provider output before returning it.
+- Configure `SILICONFLOW_API_KEY` before relying on LLM fallback parsing; the service validates and normalizes provider output before returning it.
 - Add admin-only account creation when ready. Public self-registration is intentionally absent from the MVP.

@@ -24,4 +24,13 @@ export default () => ({
     sms: process.env.SMS_PROVIDER ?? 'placeholder',
     objectStorage: process.env.OBJECT_STORAGE_PROVIDER ?? 'placeholder',
   },
+  llm: {
+    provider: process.env.LLM_PROVIDER ?? 'placeholder',
+    siliconFlow: {
+      baseUrl: process.env.SILICONFLOW_BASE_URL ?? 'https://api.siliconflow.cn/v1/chat/completions',
+      apiKey: process.env.SILICONFLOW_API_KEY || undefined,
+      model: process.env.SILICONFLOW_MODEL ?? 'Pro/zai-org/GLM-4.7',
+      timeoutMs: Number(process.env.SILICONFLOW_TIMEOUT_MS ?? 15000),
+    },
+  },
 });
